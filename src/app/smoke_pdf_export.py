@@ -46,7 +46,7 @@ def build_pdf():
     w.rect = fitz.Rect(50, 400, 250, 420)
     w.field_name = "nome"
     w.field_type = fitz.PDF_WIDGET_TYPE_TEXT
-    w.field_value = "Mario Rossi"
+    w.field_value = "Claudia Neri"
     p.add_widget(w)
 
     p2 = doc.new_page()
@@ -62,22 +62,29 @@ def build_pdf():
 MAPPING = {
     "[FULLNAME_1]": "Mario Rossi",
     "[FULLNAME_2]": "Francesco Cordella",
+    "[FULLNAME_3]": "Claudia Neri",
     "[CITY_1]": "Milano",
     "[IBAN_1]": "IT60X0542811101000000123456",
     "[EMAIL_1]": "m.rossi@studio.it",
     "[AGE_1]": "45",                       # 2 sole cifre -> deve finire in "skipped"
 }
 
-out, rep = px.redact_pdf(build_pdf(), MAPPING)
+source = build_pdf()
+with fitz.open(stream=source, filetype="pdf") as d:
+    source_text = px.readable_text(d)
+check("testo estratto include i campi modulo", "Claudia Neri" in source_text)
+
+out, rep = px.redact_pdf(source, MAPPING)
 print("report:", {k: v for k, v in rep.items() if k != "by_placeholder"})
 print("occorrenze:", rep["by_placeholder"], "\n")
 
 with fitz.open(stream=out, filetype="pdf") as d:
-    txt = px._readable_text(d)
+    txt = px.readable_text(d)
     meta, toc, embs = d.metadata, d.get_toc(simple=True), d.embfile_names()
 low = txt.lower()
 
 check("nome semplice redatto", "mario rossi" not in low)
+check("campo modulo redatto", "claudia neri" not in low)
 check("nome sillabato a fine riga redatto", "cesco cordella" not in low)
 check("sottostringa CORDELLA non toccata", "cordella e densita" in low)
 check("IBAN redatto", "it60x054281110100" not in low.replace(" ", ""))

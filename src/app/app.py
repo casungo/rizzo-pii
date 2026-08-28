@@ -504,7 +504,7 @@ def _text_from_bytes(name, data):
     ext = os.path.splitext(name)[1]
     if _is_pdf(name, data):
         with fitz.open(stream=data, filetype="pdf") as doc:
-            return "\n".join(page.get_text() for page in doc)
+            return pdf_export.readable_text(doc)
     if ext in TEXT_EXTS or not ext:
         for enc in ("utf-8-sig", "utf-16", "latin-1"):
             try:

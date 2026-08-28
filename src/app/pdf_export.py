@@ -315,7 +315,7 @@ def _strip_embedded(doc):
     return removed
 
 
-def _readable_text(doc):
+def readable_text(doc):
     """TUTTO il testo leggibile del documento: pagine + annotazioni + campi
     modulo + segnalibri. E' la base della verifica dei residui: se un valore
     compare qui, l'anonimizzazione NON e' completa.
@@ -349,7 +349,7 @@ def _verify_residuals(pdf_bytes, items):
     pattern della redazione (sillabazione inclusa), altrimenti dichiarerebbe
     "0 residui" proprio nei casi che il matcher non sa gestire."""
     with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-        text = _readable_text(doc)
+        text = readable_text(doc)
     residual = []
     for ph, val in items:
         pat = _value_pattern(val)
