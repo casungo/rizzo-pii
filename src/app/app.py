@@ -622,8 +622,9 @@ def _build_anonymized_pdf():
     if not text:
         raise _ReqError("Nessun testo da anonimizzare.")
 
-    stem = os.path.splitext(_safe_name(name, "documento.pdf"))[0] or "documento"
-    out_name = f"{stem}_anonimizzato.pdf"
+    # Il nome in upload puo' contenere PII non presente o non rilevata nel testo.
+    # Il download non ne conserva nessuna parte.
+    out_name = "documento_anonimizzato.pdf"
 
     excl = server_config.parse_tag_list(raw_excl) if raw_excl is not None else EXCLUDED_TAGS
     # mapping_enabled=True e' interno: il risultato non esce da questa funzione.
