@@ -425,6 +425,8 @@ def analyze(text, excluded=None, mapping_enabled=True, manual=None, clear=None):
             "ph": e["ph"],
             "src": e["source"],
             "validated": e["validated"],
+            "start": e["start"],
+            "end": e["end"],
         }
         if mapping_enabled:                       # senza dizionario niente valore originale
             seg["t"] = text[e["start"]:e["end"]]
@@ -1399,7 +1401,7 @@ const T = {
   t_need_input:"Inserisci del testo o un PDF", t_error:"Errore",
   manual_add:"Aggiungi selezione", manual_clear:"Rimuovi selezioni",
   manual_keep:"Mantieni in chiaro",
-  manual_hint:"Seleziona nel testo un dato PII non rilevato.",
+  manual_hint:"Seleziona un dato non rilevato, oppure clicca una redazione per mantenerla in chiaro.",
   manual_need:"Prima seleziona un testo da anonimizzare.", manual_count:(add,clear)=>add+" aggiunte, "+clear+" in chiaro",
   t_copied:"Testo anonimizzato copiato", t_need_anon:"Prima anonimizza un testo",
   t_nothing_dl:"Niente da scaricare", t_dl_ok:"Dizionario scaricato",
@@ -1466,7 +1468,7 @@ const T = {
   t_need_input:"Enter some text or a PDF", t_error:"Error",
   manual_add:"Add selection", manual_clear:"Clear selections",
   manual_keep:"Keep in clear text",
-  manual_hint:"Select PII in the text that was not detected.",
+  manual_hint:"Select undetected PII, or click a redaction to keep it in clear text.",
   manual_need:"Select text to anonymize first.", manual_count:(add,clear)=>add+" added, "+clear+" kept in clear text",
   t_copied:"Anonymized text copied", t_need_anon:"Anonymize a text first",
   t_nothing_dl:"Nothing to download", t_dl_ok:"Dictionary downloaded",
@@ -1658,6 +1660,14 @@ function render(){
       // senza dizionario il server non manda il valore originale: niente da mostrare al passaggio
       sp.title=(s.t?s.t+'\n':'')+`(${s.src}${s.validated?' · checksum ✓':''})`;
       sp.innerHTML=s.ph.replace(/[\[\]]/g,'')+(s.validated?'<span class="ck">✓</span>':'');
+      sp.onclick=()=>{
+        const first=$('src').value.length-$('src').value.trimStart().length;
+        const start=s.start+first,end=s.end+first;
+        if(CLEAR.some(e=>e.start===start&&e.end===end)){
+          CLEAR=CLEAR.filter(e=>e.start!==start||e.end!==end);
+        }else CLEAR.push({start,end});
+        renderManual();run();
+      };
       prev.appendChild(sp);
     }else prev.appendChild(document.createTextNode(s.t));
   }
@@ -1730,7 +1740,7 @@ $('keepManual').onclick=()=>{
   CLEAR.push({start,end});renderManual();
   if(DATA)run();
 };
-$('clearManual').onclick=()=>{MANUAL=[];CLEAR=[];renderManual();};
+$('clearManual').onclick=()=>{MANUAL=[];CLEAR=[];renderManual();if(DATA)run();};
 
 /* ---- view toggle (dx): anteprima con i tag | testo da copiare | PDF censurato ---- */
 async function setView(v){

@@ -17,6 +17,8 @@ class ManualEntityTests(unittest.TestCase):
         self.assertEqual("manuale", got[0]["source"])
         self.assertEqual("FULLNAME", got[0]["label"])
         self.assertEqual([(0, 5)], manual_entities.exclusions(text, [{"start": 0, "end": 5}]))
+        self.assertRaises(ValueError, manual_entities.exclusions, text,
+                          [{"start": 0, "end": len(text) + 1}])
         for bad in ([{"start": -1, "end": 2, "label": "FULLNAME"}],
                     [{"start": 0, "end": 2, "label": "UNKNOWN"}],
                     "not-a-list"):
