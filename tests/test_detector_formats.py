@@ -43,6 +43,9 @@ POSITIVI = [
      "eyJhbGciOiJIUzI1NiJ9.payload"),
     ("private_key_pem", "-----BEGIN PRIVATE KEY-----\nABCDEF123456\n-----END PRIVATE KEY-----",
      "PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nABCDEF123456\n-----END PRIVATE KEY-----"),
+    ("internal_ip", "DATABASE_HOST=10.24.3.18", "IP", "10.24.3.18"),
+    ("hostname", 'server="db-produzione.interno"', "HOSTNAME", "db-produzione.interno"),
+    ("local_path", "backup=/home/mario/progetto/.env", "LOCAL_PATH", "/home/mario/progetto/.env"),
     # IBAN: mod-97 obbligatorio (strict), quindi la regex deve arrivare al
     # validatore anche quando il numero e' stampato con i separatori.
     ("iban_compatto", "Bonifico su IT60X0542811101000000123456 entro il 30/09.",
@@ -175,6 +178,11 @@ class DetectorFormatTests(unittest.TestCase):
     def test_bearer_maschera_il_token_non_lo_schema(self):
         testo = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload"
         self.assertEqual(["eyJhbGciOiJIUzI1NiJ9.payload"], spans(testo, "SECRET"))
+
+    def test_valori_tecnici_non_maschera_la_chiave(self):
+        testo = 'server="db-produzione.interno" path=C:\\Users\\mario\\app'
+        self.assertEqual(["db-produzione.interno"], spans(testo, "HOSTNAME"))
+        self.assertEqual([r"C:\Users\mario\app"], spans(testo, "LOCAL_PATH"))
 
     def test_iban_non_ingoia_la_parola_successiva(self):
         # La regex raggruppata e' golosa: se assorbe il token dopo l'IBAN il

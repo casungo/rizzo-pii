@@ -200,11 +200,14 @@ The five Italian-legal tags (`CF`, `PIVA`, `CATASTO`, `DOCID`, `PROVINCE`) are t
 rizzo-pii exists: they do not appear as labeled data in any public corpus, so they are created
 through synthesis with mathematically valid checksums.
 
-The app also adds three regex-only tags: **`URL`**, **`SECRET`**, and **`PRIVATE_KEY`**. The model
+The app also adds six regex-only tags: **`URL`**, **`SECRET`**, **`PRIVATE_KEY`**, **`IP`**,
+**`HOSTNAME`** and **`LOCAL_PATH`**. The model
 does not train on them. `URL` matches `http(s)://…`, `www.…` and bare domains on a closed TLD
 list; the closed list keeps Italian legalese (`p.iva`, `n.ro`, `S.r.l.`) from being read as a
 domain, at the price of letting an exotic TLD through. `SECRET` masks values assigned to common
-credential keys and `PRIVATE_KEY` masks complete PEM private-key blocks.
+credential keys and `PRIVATE_KEY` masks complete PEM private-key blocks. `IP` only masks private,
+loopback or link-local addresses; `HOSTNAME` needs an explicit configuration key and `LOCAL_PATH`
+masks user and system paths.
 
 ---
 

@@ -16,6 +16,7 @@ checksum non viene nemmeno interrogato e, dove `strict=True`, il valore resta
 in chiaro senza alcun fallback.
 """
 
+import ipaddress
 import re
 
 
@@ -206,6 +207,15 @@ _SECRET_ASSIGNMENT = re.compile(
     re.VERBOSE,
 )
 _BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+(?P<value>[A-Za-z0-9._~+/=-]{8,})")
+_PRIVATE_IP = re.compile(r"(?<![\w.])(?P<value>(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+                         r"(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?![\w.])")
+_HOST_ASSIGNMENT = re.compile(
+    r"""(?im)\b(?:host(?:name)?|server|endpoint)\b\s*(?:=|:)\s*
+    (?P<value>"[A-Za-z0-9][A-Za-z0-9.-]*"|'[A-Za-z0-9][A-Za-z0-9.-]*'|
+    [A-Za-z0-9][A-Za-z0-9.-]*)""", re.VERBOSE)
+_LOCAL_PATH = re.compile(
+    r"(?<!\w)(?:[A-Za-z]:\\|~[/\\]|/(?:home|Users|var|etc|opt|srv|private)/)"
+    r"[^\s\"'`<>,;]+")
 
 
 # ISO 13616: lunghezza dell'IBAN per paese. Serve a sapere DOVE finisce quando e'
@@ -295,6 +305,19 @@ def detect_secrets(text):
                 start, end = start + 1, end - 1
             if start < end:
                 ents.append({"label": "SECRET", "start": start, "end": end,
+                             "score": 1.0, "validated": False, "source": "regex"})
+    for m in _PRIVATE_IP.finditer(text):
+        address = ipaddress.ip_address(m.group("value"))
+        if address.is_private or address.is_loopback or address.is_link_local:
+            ents.append({"label": "IP", "start": m.start("value"), "end": m.end("value"),
+                         "score": 1.0, "validated": True, "source": "regex"})
+    for rx, label in ((_HOST_ASSIGNMENT, "HOSTNAME"), (_LOCAL_PATH, "LOCAL_PATH")):
+        for m in rx.finditer(text):
+            start, end = m.span("value") if "value" in m.groupdict() else m.span()
+            if text[start] in "\"'" and text[end - 1] == text[start]:
+                start, end = start + 1, end - 1
+            if start < end:
+                ents.append({"label": label, "start": start, "end": end,
                              "score": 1.0, "validated": False, "source": "regex"})
     return ents
 

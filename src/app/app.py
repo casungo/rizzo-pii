@@ -249,6 +249,12 @@ TAGS = [
      "Password, token and connection string (regex net only)", "api_key=abc123"),
     ("PRIVATE_KEY", "Chiave privata PEM (rilevata dalla rete regex)",
      "PEM private key (regex net only)", "-----BEGIN PRIVATE KEY-----"),
+    ("IP", "Indirizzo IP interno (rilevato dalla rete regex)",
+     "Internal IP address (regex net only)", "10.0.0.12"),
+    ("HOSTNAME", "Hostname o server di configurazione (rilevato dalla rete regex)",
+     "Configuration hostname or server (regex net only)", "db-produzione.interno"),
+    ("LOCAL_PATH", "Percorso locale (rilevato dalla rete regex)",
+     "Local path (regex net only)", "/home/mario/progetto/.env"),
 ]
 TAG_NAMES = [t[0] for t in TAGS]
 
