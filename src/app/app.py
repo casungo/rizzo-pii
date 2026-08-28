@@ -59,6 +59,7 @@ from flask import (Flask, jsonify, render_template_string, request,
 
 import pdf_export
 import batch_uploads
+import mapping_seed
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -375,7 +376,7 @@ def _norm(s):
     return re.sub(r"\s+", " ", s.strip()).casefold()
 
 
-def analyze(text, excluded=None, mapping_enabled=True):
+def analyze(text, excluded=None, mapping_enabled=True, existing_mapping=None):
     """excluded = tag da NON anonimizzare: le entita' di quel tipo vengono scartate
     prima della fusione, quindi il valore resta in chiaro nel testo di output.
 
@@ -392,7 +393,8 @@ def analyze(text, excluded=None, mapping_enabled=True):
     kept = _merge(cands, text)
 
     # ID reversibili: stesso (label, valore-normalizzato) -> stesso placeholder.
-    counters, seen, mapping = {}, {}, {}
+    counters, seen, mapping = mapping_seed.seed(existing_mapping if mapping_enabled else None,
+                                                set(TAG_NAMES))
     for e in kept:
         val = text[e["start"]:e["end"]]
         key = (e["label"], _norm(val))
@@ -546,11 +548,13 @@ def analyze_route():
             return jsonify({"error": f"Impossibile leggere il file: {e}"}), 400
         raw_excl = request.form.get("exclude_tags")
         raw_map = request.form.get("include_mapping")
+        raw_existing = request.form.get("existing_mapping")
     else:
         payload = request.get_json(silent=True) or {}
         text = payload.get("text", "")
         raw_excl = payload.get("exclude_tags")
         raw_map = payload.get("include_mapping")
+        raw_existing = payload.get("existing_mapping")
 
     text = (text or "").strip()
     if not text:
@@ -560,7 +564,11 @@ def analyze_route():
     excl = server_config.parse_tag_list(raw_excl) if raw_excl is not None else EXCLUDED_TAGS
     keep_map = (server_config.parse_bool(raw_map, MAPPING_ENABLED)
                 if raw_map is not None else MAPPING_ENABLED)
-    out = analyze(text, excl, keep_map)
+    try:
+        existing = json.loads(raw_existing) if isinstance(raw_existing, str) else raw_existing
+        out = analyze(text, excl, keep_map, existing)
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
+        return jsonify({"error": str(e)}), 400
     out["source_text"] = text
     out["n_documents"] = len(uploads) if uploads else 1
     return jsonify(out)
@@ -621,10 +629,12 @@ def _build_anonymized_pdf():
         except Exception as e:                       # PDF corrotto / protetto
             raise _ReqError(f"Impossibile leggere il file: {e}")
         raw_excl = request.form.get("exclude_tags")
+        raw_existing = request.form.get("existing_mapping")
     else:
         payload = request.get_json(silent=True) or {}
         name, data, text = "", b"", payload.get("text", "")
         raw_excl = payload.get("exclude_tags")
+        raw_existing = payload.get("existing_mapping")
 
     text = (text or "").strip()
     if not text:
@@ -635,7 +645,11 @@ def _build_anonymized_pdf():
 
     excl = server_config.parse_tag_list(raw_excl) if raw_excl is not None else EXCLUDED_TAGS
     # mapping_enabled=True e' interno: il risultato non esce da questa funzione.
-    res = analyze(text, excl, mapping_enabled=True)
+    try:
+        existing = json.loads(raw_existing) if isinstance(raw_existing, str) else raw_existing
+        res = analyze(text, excl, mapping_enabled=True, existing_mapping=existing)
+    except (TypeError, ValueError, json.JSONDecodeError) as e:
+        raise _ReqError(str(e))
     if not res["mapping"]:
         raise _ReqError("Nessuna PII trovata: non c'e' niente da "
                         "anonimizzare in questo documento.", 422)
@@ -1160,6 +1174,11 @@ PAGE = r"""
             <span id="dropTxt">Trascina un <b>PDF</b> o un <b>.md</b> qui, oppure <b>scegli un file</b></span>
             <input type="file" id="pdf" accept=".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain" multiple hidden>
           </label>
+          <label class="drop">
+            <span class="ic">📚</span>
+            <span id="seriesTxt">Carica un dizionario per continuare la stessa serie di documenti</span>
+            <input type="file" id="seriesDict" accept="application/json" hidden>
+          </label>
           <div class="mapsw" id="mapSw">
             <button class="tsw" id="mapToggle" role="switch" aria-checked="true"
                     aria-labelledby="mapTtl" onclick="toggleMapping()"><span class="knob"></span></button>
@@ -1331,6 +1350,7 @@ let TAGS = [];             // legenda dei tag servita da /settings
 let EXCL = new Set();      // tag da NON anonimizzare (scelta corrente)
 let TAGS_LOADED = false;   // /settings ha risposto -> possiamo mandare gli override
 let MAPPING = true;        // dizionario reversibile on/off (switch nella card di input)
+let SERIES_MAP = null;     // dizionario da un documento precedente della stessa serie
 let SRC_DOC = null;        // PDF caricato, renderizzato dal server (colonna sinistra)
 let OUT_DOC = null;        // PDF anonimizzato (colonna destra), generato pigramente
 let VIEW = 'prev';         // vista attiva a destra: prev | text | pdf
@@ -1586,8 +1606,10 @@ async function run(){
     const excl=TAGS_LOADED?[...EXCL]:null;
     if(files.length){const fd=new FormData();for(const file of files)fd.append('pdf',file);
       if(excl){fd.append('exclude_tags',excl.join(','));fd.append('include_mapping',MAPPING?'1':'0');}
+      if(SERIES_MAP)fd.append('existing_mapping',JSON.stringify(SERIES_MAP));
       resp=await fetch('/analyze',{method:'POST',body:fd});}
     else{const body={text};if(excl){body.exclude_tags=excl;body.include_mapping=MAPPING;}
+      if(SERIES_MAP)body.existing_mapping=SERIES_MAP;
       resp=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify(body)});}
     const d=await resp.json();
@@ -1700,8 +1722,10 @@ function buildOutPdf(){
       let resp;
       if(files.length){const fd=new FormData();for(const file of files)fd.append('pdf',file);
         if(excl)fd.append('exclude_tags',excl.join(','));
+          if(SERIES_MAP)fd.append('existing_mapping',JSON.stringify(SERIES_MAP));
           resp=await fetch('/pdf/preview',{method:'POST',body:fd});}
       else{const body={text};if(excl)body.exclude_tags=excl;
+          if(SERIES_MAP)body.existing_mapping=SERIES_MAP;
           resp=await fetch('/pdf/preview',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify(body)});}
       const d=await resp.json();
@@ -1770,6 +1794,12 @@ $('dictFile').onchange=e=>{const f=e.target.files[0];if(!f)return;
     $('dictInfo').textContent=T[L].dict_loaded_n(Object.keys(MAP).length);
     toast(tt('t_dict_loaded'));}catch{toast(tt('t_json_invalid'),false);}};
   r.readAsText(f);};
+$('seriesDict').onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{try{const m=JSON.parse(r.result);
+    if(!m||Array.isArray(m)||typeof m!=='object')throw new Error();
+    SERIES_MAP=m;$('seriesTxt').textContent='📚 Dizionario serie caricato · '+Object.keys(m).length+' ID';
+  }catch{$('seriesTxt').textContent='Dizionario serie non valido';}};
+  r.readAsText(f);};
 
 /* ---- input helpers ---- */
 $('go').onclick=run;
@@ -1780,6 +1810,7 @@ $('clear').onclick=()=>{$('src').value='';$('pdf').value='';$('dropTxt').innerHT
   // la card era solo nascosta: senza queste tre righe il dizionario resta in MAP e su
   // disco, e al riavvio ricompare zitto al posto di quello del documento nuovo
   MAP={};localStorage.removeItem('pii_map');$('dictInfo').textContent='';
+  SERIES_MAP=null;$('seriesDict').value='';$('seriesTxt').textContent='Carica un dizionario per continuare la stessa serie di documenti';
   SRC_DOC=null;OUT_DOC=null;$('pdfSrcView').innerHTML='';$('pdfOutView').innerHTML='';
   $('srcTabs').style.display='none';$('inHint').innerHTML=tt('in_hint');
   $('inHint').style.display='';setSrcView('text');setView('prev');
