@@ -117,6 +117,13 @@ NEGATIVI = [
     ("mandato_con_punti", "Mandato n. 12.345.678.901.234 del tesoriere."),
 ]
 
+CATASTO = [
+    ("foglio_particella", "Immobile al foglio 12, particella 345.",
+     "foglio 12, particella 345"),
+    ("abbreviazioni_e_sub", "Fg. 12, part. 345, sub. 6.",
+     "Fg. 12, part. 345, sub. 6"),
+]
+
 TAG_CON_CHECKSUM = ("IBAN", "CF", "PIVA", "CREDITCARDNUMBER")
 
 
@@ -161,6 +168,11 @@ class DetectorFormatTests(unittest.TestCase):
                       "Cfr. pagg. 12-15 e 20-24 della memoria."):
             with self.subTest(testo):
                 self.assertEqual([], spans(testo, "TELEPHONENUM"))
+
+    def test_particella_catastale_restano_nello_stesso_span(self):
+        for nome, testo, atteso in CATASTO:
+            with self.subTest(nome):
+                self.assertEqual([atteso], spans(testo, "CATASTO"))
 
     def test_iban_non_ingoia_la_parola_successiva(self):
         # La regex raggruppata e' golosa: se assorbe il token dopo l'IBAN il

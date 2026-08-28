@@ -159,6 +159,15 @@ DETECTORS = [
                 r"(?:it|com|net|org|eu|info|io|dev|app|gov|edu|cloud|online|site|blog)"
                 r"\b(?:/[^\s<>\"']*)?", re.IGNORECASE),
      None, True),
+    # I riferimenti catastali hanno una forma chiara quando foglio e particella
+    # compaiono insieme. Tenerli nello stesso span evita che il numero della
+    # particella resti in chiaro se il modello riconosce solo il foglio.
+    ("CATASTO",
+     re.compile(r"\b(?:foglio|fg\.?)\s*\d+\s*,?\s*"
+                r"(?:particella|part\.?)\s*\d+"
+                r"(?:\s*,?\s*(?:subalterno|sub\.?)\s*\d+)?\b",
+                re.IGNORECASE),
+     None, True),
     # DOCID: il codice di un atto e' scritto sempre dopo la sua sigla ("R.G. 1234/2024",
     # "Prot. 123/2024", "Rep. 45"). E' la sigla a renderlo riconoscibile: il numero da
     # solo ("1234/2024") non si distingue da una frazione o da un articolo di legge,
@@ -290,5 +299,4 @@ def detect_regex(text):
                 "source": "regex",
             })
     return ents
-
 
