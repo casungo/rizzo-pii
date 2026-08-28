@@ -44,6 +44,7 @@ Preferenze di anonimizzazione (precedenza): campo nella richiesta > CLI --exclud
 """
 
 import bisect
+import json
 import os
 import re
 import secrets
@@ -447,7 +448,8 @@ def analyze(text, excluded=None, mapping_enabled=True):
 # Endpoints
 # --------------------------------------------------------------------------- #
 def _page():
-    return PAGE.replace("__VERSION__", APP_VERSION)
+    return (PAGE.replace("__VERSION__", APP_VERSION)
+            .replace("__SCRIPT_ROOT__", json.dumps(request.script_root.rstrip("/"))))
 
 
 @app.route("/")
@@ -819,7 +821,7 @@ PAGE = r"""
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="/assets/mascot_shield.png">
+<link rel="icon" href="__SCRIPT_ROOT__/assets/mascot_shield.png">
 <title>Rizzo PII · locale</title>
 <style>
   :root{
@@ -1104,7 +1106,7 @@ PAGE = r"""
 <body>
 <div class="app">
   <header>
-    <div class="logo"><img src="/assets/mascot_shield.png" alt="rizzo-pii"
+    <div class="logo"><img src="__SCRIPT_ROOT__/assets/mascot_shield.png" alt="rizzo-pii"
          onerror="this.parentNode.textContent='🦔'"></div>
     <div>
       <h1>Rizzo PII <span class="ver">v__VERSION__</span></h1>
@@ -1184,7 +1186,7 @@ PAGE = r"""
         <div class="bd">
           <div class="view" id="viewPrev">
             <div class="empty" id="emptyPrev">
-              <img src="/assets/mascot_doc.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'big',textContent:'🕵️'}))">
+              <img src="__SCRIPT_ROOT__/assets/mascot_doc.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'big',textContent:'🕵️'}))">
               <div data-i18n="empty_prev">L'anteprima con le PII evidenziate apparirà qui.</div>
             </div>
             <div class="preview" id="prev" style="display:none"></div>
@@ -1257,7 +1259,7 @@ PAGE = r"""
         <div class="hd"><h2 data-i18n="r_title2">Testo ripristinato</h2></div>
         <div class="bd">
           <div class="view"><div class="preview" id="rout">
-            <div class="empty"><img src="/assets/mascot_doc.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'big',textContent:'🔓'}))">
+            <div class="empty"><img src="__SCRIPT_ROOT__/assets/mascot_doc.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'big',textContent:'🔓'}))">
             <div data-i18n="empty_rout">Il testo con i valori reali apparirà qui.</div></div>
           </div></div>
           <div class="row"><button class="btn" id="rcopy">📋 <span data-i18n="rcopy">Copia testo ripristinato</span></button></div>
@@ -1315,6 +1317,8 @@ PAGE = r"""
 
 <script>
 const $ = id => document.getElementById(id);
+const API_ROOT = __SCRIPT_ROOT__;
+const api = path => API_ROOT + path;
 let DATA = null;            // ultimo risultato analyze
 let MAP = {};              // {placeholder -> valore} sessione corrente
 const off = new Set();     // label nascoste nella preview
@@ -1459,7 +1463,7 @@ const T = {
 const tt=k=>T[L][k];
 
 function routEmpty(){
-  return '<div class="empty"><img src="/assets/mascot_doc.png" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'big\',textContent:\'🔓\'}))"><div>'+tt('empty_rout')+'</div></div>';
+  return '<div class="empty"><img src="'+api('/assets/mascot_doc.png')+'" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'div\'),{className:\'big\',textContent:\'🔓\'}))"><div>'+tt('empty_rout')+'</div></div>';
 }
 
 function applyLang(l){
@@ -1508,7 +1512,7 @@ function renderPages(el,doc){
     const pg=document.createElement('div');pg.className='pg';
     const im=document.createElement('img');
     im.loading='lazy';im.alt=(i+1)+' / '+doc.n_pages;   // alt = pagina: se il render manca si vede quale
-    im.src=`/doc/${doc.doc_id}/page/${i}.png`;
+    im.src=api(`/doc/${doc.doc_id}/page/${i}.png`);
     pg.appendChild(im);
     const n=document.createElement('span');n.className='pgn';
     n.textContent=(i+1)+' / '+doc.n_pages;pg.appendChild(n);
@@ -1548,7 +1552,7 @@ async function onFile(f){
   $('sPdf').classList.add('on');$('sText').classList.remove('on');
   try{
     const fd=new FormData();fd.append('pdf',f);
-    const r=await fetch('/preview',{method:'POST',body:fd});
+    const r=await fetch(api('/preview'),{method:'POST',body:fd});
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||'');
     SRC_DOC=d;$('src').value=d.text||'';
@@ -1573,9 +1577,9 @@ async function run(){
     const excl=TAGS_LOADED?[...EXCL]:null;
     if(file){const fd=new FormData();fd.append('pdf',file);
       if(excl){fd.append('exclude_tags',excl.join(','));fd.append('include_mapping',MAPPING?'1':'0');}
-      resp=await fetch('/analyze',{method:'POST',body:fd});}
+      resp=await fetch(api('/analyze'),{method:'POST',body:fd});}
     else{const body={text};if(excl){body.exclude_tags=excl;body.include_mapping=MAPPING;}
-      resp=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+      resp=await fetch(api('/analyze'),{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify(body)});}
     const d=await resp.json();
     if(!resp.ok){toast(d.error||tt('t_error'),false);return;}
@@ -1687,9 +1691,9 @@ function buildOutPdf(){
       let resp;
       if(file){const fd=new FormData();fd.append('pdf',file);
         if(excl)fd.append('exclude_tags',excl.join(','));
-          resp=await fetch('/pdf/preview',{method:'POST',body:fd});}
+          resp=await fetch(api('/pdf/preview'),{method:'POST',body:fd});}
       else{const body={text};if(excl)body.exclude_tags=excl;
-          resp=await fetch('/pdf/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+          resp=await fetch(api('/pdf/preview'),{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify(body)});}
       const d=await resp.json();
       if(!resp.ok){toast(d.error||tt('t_pdf_err'),false);return null;}
@@ -1720,7 +1724,7 @@ $('dlpdf').onclick=async()=>{
     const d=await buildOutPdf();
     if(!d)return;
     const a=document.createElement('a');
-    a.href='/doc/'+d.doc_id+'/file.pdf';
+    a.href=api('/doc/'+d.doc_id+'/file.pdf');
     a.download=d.filename||'documento_anonimizzato.pdf';a.click();
     // residui = valori ancora leggibili nell'output; saltati = valori troppo corti
     // per essere cercati senza devastare il documento. Entrambi restano IN CHIARO.
@@ -1802,7 +1806,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('infoBtn').classL
 
 /* ---- config modal ---- */
 async function openConfig(){
-  const r=await fetch('/config');const d=await r.json();
+  const r=await fetch(api('/config'));const d=await r.json();
   $('cfgHost').value=d.host||'127.0.0.1';
   $('cfgPort').value=d.port||5005;
   $('cfgStatus').className='cfg-status';$('cfgStatus').textContent='';
@@ -1813,7 +1817,7 @@ $('cfgOverlay').addEventListener('click',e=>{if(e.target===$('cfgOverlay'))close
 async function checkPort(){
   const h=$('cfgHost').value.trim(),p=parseInt($('cfgPort').value);
   if(!p||p<1024||p>65535){$('cfgStatus').className='cfg-status fail';$('cfgStatus').textContent=tt('cfg_in_use');return;}
-  const r=await fetch(`/port-check?host=${encodeURIComponent(h)}&port=${p}`);
+  const r=await fetch(api(`/port-check?host=${encodeURIComponent(h)}&port=${p}`));
   const d=await r.json();
   $('cfgStatus').className=d.available?'cfg-status ok':'cfg-status fail';
   $('cfgStatus').textContent=d.available?tt('cfg_available'):tt('cfg_in_use');
@@ -1821,7 +1825,7 @@ async function checkPort(){
 async function saveConfig(){
   const h=$('cfgHost').value.trim(),p=parseInt($('cfgPort').value);
   if(!p||p<1024||p>65535){toast(tt('cfg_in_use'),false);return;}
-  await fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},
+  await fetch(api('/config'),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({host:h,port:p})});
   toast(tt('cfg_saved'));
   closeConfig();
@@ -1843,7 +1847,7 @@ async function toggleMapping(){
   renderMapping();
   toast(MAPPING?tt('t_map_on'):tt('t_map_off'),MAPPING);
   try{                                 // persiste: vale anche per l'API /analyze
-    await fetch('/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    await fetch(api('/settings'),{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({mapping_enabled:MAPPING})});
   }catch(e){}
 }
@@ -1852,7 +1856,7 @@ async function toggleMapping(){
 let TAGS_META={};
 async function loadTags(){
   try{
-    const d=await (await fetch('/settings')).json();
+    const d=await (await fetch(api('/settings'))).json();
     TAGS=d.tags||[];EXCL=new Set(d.excluded_tags||[]);TAGS_META=d;TAGS_LOADED=true;
     MAPPING=d.mapping_enabled!==false;renderMapping();
   }catch(e){/* server vecchio o offline: si continua con il comportamento di default */}
@@ -1893,7 +1897,7 @@ function closeTags(){$('tagsOverlay').classList.remove('open');loadTags();}  // 
 $('tagsOverlay').addEventListener('click',e=>{if(e.target===$('tagsOverlay'))closeTags();});
 async function saveTags(){
   try{
-    const r=await fetch('/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r=await fetch(api('/settings'),{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({excluded_tags:[...EXCL]})});
     const d=await r.json();
     if(!r.ok)throw new Error(d.error||'');
