@@ -664,6 +664,12 @@ TEMPLATES = [
     "Il datore di lavoro {ORG}, P.IVA {PIVA}, matricola INPS {MATRICOLA}, comunica che "
     "{FULLNAME}, C.F. {CF}, e' stato assunto in data {DATE}.",
 
+    # Buste paga: colonne e campi ravvicinati, dove i nomi maiuscoli e i codici
+    # finiscono spesso sulla stessa riga nell'estrazione PDF.
+    "CEDOLINO PAGA\nDIPENDENTE {FULLNAME} | C.F. {CF} | MATRICOLA {MATRICOLA}\n"
+    "DATORE {ORG} | P.IVA {PIVA}\nPERIODO {DATE} | IBAN {IBAN}\n"
+    "COMPETENZE {AMOUNT} | TRATTENUTE {AMOUNT} | NETTO {AMOUNT}",
+
     "Reclamo relativo alla polizza {POLIZZA}: si chiede il rimborso di {AMOUNT} sull'IBAN "
     "{IBAN}, intestato a {FULLNAME}, C.F. {CF}.",
 
