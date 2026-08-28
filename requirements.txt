@@ -28,6 +28,7 @@ python-dotenv
 # Local anonymization app (Flask UI + PDF parsing)
 flask
 pymupdf
+opencv-python-headless
 
 # Loss / metric plots produced by the training script
 matplotlib

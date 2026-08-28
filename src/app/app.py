@@ -58,6 +58,7 @@ from flask import (Flask, jsonify, render_template_string, request,
                    send_from_directory)
 
 import pdf_export
+import scan_qr
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -628,13 +629,18 @@ def _build_anonymized_pdf():
     excl = server_config.parse_tag_list(raw_excl) if raw_excl is not None else EXCLUDED_TAGS
     # mapping_enabled=True e' interno: il risultato non esce da questa funzione.
     res = analyze(text, excl, mapping_enabled=True)
-    if not res["mapping"]:
-        raise _ReqError("Nessuna PII trovata: non c'e' niente da "
-                        "anonimizzare in questo documento.", 422)
+    qr_redactions = []
+    if data and _is_pdf(name, data):
+        try:
+            qr_redactions = scan_qr.redactions(data)
+        except scan_qr.QrError as e:
+            raise _ReqError(str(e), 503)
+    if not res["mapping"] and not qr_redactions:
+        raise _ReqError("Nessuna PII o QR trovata: non c'e' niente da anonimizzare.", 422)
 
     if data and _is_pdf(name, data):
         try:
-            out, report = pdf_export.redact_pdf(data, res["mapping"])
+            out, report = pdf_export.redact_pdf(data, res["mapping"], qr_redactions)
         except pdf_export.PdfError as e:
             raise _ReqError(str(e))
         if report["occurrences"] == 0:

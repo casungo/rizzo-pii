@@ -369,7 +369,8 @@ REDACT_FILL = (0.486, 0.227, 0.620)
 REDACT_TEXT = (1.0, 1.0, 1.0)
 
 
-def redact_pdf(pdf_bytes, mapping, fill=REDACT_FILL, text_color=REDACT_TEXT):
+def redact_pdf(pdf_bytes, mapping, image_redactions=(), fill=REDACT_FILL,
+               text_color=REDACT_TEXT):
     """PDF originale -> PDF con redazione vera + placeholder al posto delle PII.
 
     mapping: {"[FULLNAME_1]": "Mario Rossi", ...} (il dizionario di analyze()).
@@ -384,13 +385,17 @@ def redact_pdf(pdf_bytes, mapping, fill=REDACT_FILL, text_color=REDACT_TEXT):
         "widgets":        sostituzioni nei campi modulo,
         "toc":            sostituzioni nei segnalibri,
         "embedded":       allegati rimossi,
+        "image_redactions": redazioni applicate a immagini,
+        "qr_codes":      QR coperti,
     }
     """
-    if not isinstance(mapping, dict) or not mapping:
+    if not isinstance(mapping, dict):
+        raise PdfError("Dizionario non valido.")
+    if not mapping and not image_redactions:
         raise PdfError("Dizionario vuoto: anonimizza prima il documento.")
     items = [(ph, v) for ph, v in mapping.items()
              if isinstance(ph, str) and isinstance(v, str) and v.strip()]
-    if not items:
+    if mapping and not items:
         raise PdfError("Dizionario non valido.")
 
     try:
@@ -418,9 +423,16 @@ def redact_pdf(pdf_bytes, mapping, fill=REDACT_FILL, text_color=REDACT_TEXT):
 
     by_ph = {ph: 0 for ph, _, _ in usable}
     patterns = [(pat, ph) for ph, _, pat in usable]   # per annot/widget/TOC
-    total = n_annots = n_widgets = 0
+    total = n_annots = n_widgets = n_images = n_qr = 0
 
-    for page in doc:
+    image_by_page = {}
+    for item in image_redactions:
+        try:
+            image_by_page.setdefault(int(item["page"]), []).append(item)
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    for page_no, page in enumerate(doc):
         text, boxes = _page_char_index(page)
         taken = []
         if text.strip():
@@ -440,7 +452,15 @@ def redact_pdf(pdf_bytes, mapping, fill=REDACT_FILL, text_color=REDACT_TEXT):
                     if placed_any:
                         by_ph[ph] += 1
                         total += 1
-        if taken:
+        for item in image_by_page.get(page_no, ()):
+            rect = fitz.Rect(item["rect"])
+            fs = _fit_fontsize(item.get("text", ""), rect)
+            _add_redact_annot(page, rect, item.get("text") if fs else None,
+                              fs or 6, fill, text_color)
+            n_images += 1
+            n_qr += int(item.get("kind") == "qr")
+            total += 1
+        if taken or image_by_page.get(page_no):
             page.apply_redactions()   # rimozione VERA dal content stream
         # dopo le redazioni: annotazioni e campi modulo non sono content stream
         n_annots += _scrub_annots(page, patterns)
@@ -463,6 +483,8 @@ def redact_pdf(pdf_bytes, mapping, fill=REDACT_FILL, text_color=REDACT_TEXT):
         "widgets": n_widgets,
         "toc": n_toc,
         "embedded": n_emb,
+        "image_redactions": n_images,
+        "qr_codes": n_qr,
     }
 
 

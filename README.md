@@ -312,7 +312,7 @@ different flow: **[Quickstart](#quickstart)**, further down.)
 
 ### Run with Docker
 
-Nothing to install but Docker; the image carries the CPU dependencies and the model.
+Nothing to install but Docker; the image carries the CPU dependencies, QR detector and the model.
 
 ```bash
 git clone https://github.com/Rizzo-AI-Academy/rizzo-pii
@@ -482,6 +482,9 @@ Metadata, XMP, annotations, form-field values and bookmark titles are scrubbed t
 attachments are dropped. Text baked into a raster image cannot be redacted at all — if **no**
 occurrence is found anywhere in the PDF the endpoint fails with `422` rather than handing you a file
 that only looks anonymized.
+
+Every page is also checked locally for QR codes with OpenCV. The app covers a detected QR even when
+it cannot decode its payload, because the code itself may contain personal data.
 
 ### See the document, not just its text
 
