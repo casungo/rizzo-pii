@@ -58,6 +58,7 @@ from flask import (Flask, jsonify, render_template_string, request,
                    send_from_directory)
 
 import pdf_export
+import batch_uploads
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -522,19 +523,23 @@ def _extract_upload(fs):
     return _text_from_bytes(fs.filename, fs.read())
 
 
-def _uploaded_file():
+def _uploaded_files():
     """Il file dell'upload, se c'e'. "pdf" e' il nome storico del campo (l'UI lo
     usa ancora), "file" e' l'alias nuovo."""
-    return next((request.files[k] for k in ("pdf", "file")
-                 if k in request.files and request.files[k].filename), None)
+    return [fs for key in ("pdf", "file") for fs in request.files.getlist(key)
+            if fs.filename]
+
+
+def _uploaded_file():
+    return next(iter(_uploaded_files()), None)
 
 
 @app.route("/analyze", methods=["POST"])
 def analyze_route():
-    up = _uploaded_file()
-    if up is not None:
+    uploads = _uploaded_files()
+    if uploads:
         try:
-            text = _extract_upload(up)
+            text = batch_uploads.join_texts([_extract_upload(up) for up in uploads])
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
         except Exception as e:                       # PDF corrotto / protetto
@@ -557,6 +562,7 @@ def analyze_route():
                 if raw_map is not None else MAPPING_ENABLED)
     out = analyze(text, excl, keep_map)
     out["source_text"] = text
+    out["n_documents"] = len(uploads) if uploads else 1
     return jsonify(out)
 
 
@@ -604,6 +610,8 @@ def _build_anonymized_pdf():
     Ritorna (bytes, report, n_redazioni, nome_file). Solleva _ReqError sugli errori.
     """
     up = _uploaded_file()
+    if len(_uploaded_files()) > 1:
+        raise _ReqError("Il PDF scaricabile supporta un allegato alla volta: usa il testo anonimizzato e il dizionario condiviso.")
     if up is not None:
         name, data = up.filename, up.read()
         try:
@@ -1150,7 +1158,7 @@ PAGE = r"""
           <label class="drop" id="drop">
             <span class="ic">📄</span>
             <span id="dropTxt">Trascina un <b>PDF</b> o un <b>.md</b> qui, oppure <b>scegli un file</b></span>
-            <input type="file" id="pdf" accept=".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain" hidden>
+            <input type="file" id="pdf" accept=".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain" multiple hidden>
           </label>
           <div class="mapsw" id="mapSw">
             <button class="tsw" id="mapToggle" role="switch" aria-checked="true"
@@ -1560,18 +1568,23 @@ async function onFile(f){
     toast(tt('t_prev_err'),false);          // il file resta valido: l'analisi funziona lo stesso
   }
 }
+function onFiles(files){
+  if(files.length===1){onFile(files[0]);return;}
+  $('dropTxt').textContent='📎 '+files.length+' documenti selezionati';
+  SRC_DOC=null;$('srcTabs').style.display='none';$('inHint').style.display='';setSrcView('text');
+}
 
 /* ---- analyze ---- */
 async function run(){
-  const file=$('pdf').files[0];const text=$('src').value.trim();
-  if(!file&&!text){toast(tt('t_need_input'),false);return;}
+  const files=[...$('pdf').files],text=$('src').value.trim();
+  if(!files.length&&!text){toast(tt('t_need_input'),false);return;}
   $('go').disabled=true;const old=$('go').innerHTML;
   $('go').innerHTML='<span class="spin"></span> '+tt('analyzing');
   try{
     let resp;
     // override della UI. Se /settings non ha risposto non mandiamo nulla: comanda il server.
     const excl=TAGS_LOADED?[...EXCL]:null;
-    if(file){const fd=new FormData();fd.append('pdf',file);
+    if(files.length){const fd=new FormData();for(const file of files)fd.append('pdf',file);
       if(excl){fd.append('exclude_tags',excl.join(','));fd.append('include_mapping',MAPPING?'1':'0');}
       resp=await fetch('/analyze',{method:'POST',body:fd});}
     else{const body={text};if(excl){body.exclude_tags=excl;body.include_mapping=MAPPING;}
@@ -1579,7 +1592,7 @@ async function run(){
         body:JSON.stringify(body)});}
     const d=await resp.json();
     if(!resp.ok){toast(d.error||tt('t_error'),false);return;}
-    if(d.source_text&&file)$('src').value=d.source_text;
+    if(d.source_text&&files.length)$('src').value=d.source_text;
     DATA=d;off.clear();
     // senza dizionario non tocchiamo MAP ne' il localStorage: nessuna chiave nuova nasce
     if(d.mapping_enabled!==false){MAP=d.mapping;localStorage.setItem('pii_map',JSON.stringify(MAP));}
@@ -1679,13 +1692,13 @@ let PDF_JOB=null;
 function buildOutPdf(){
   if(OUT_DOC)return Promise.resolve(OUT_DOC);
   if(PDF_JOB)return PDF_JOB;                 // click su tab + download insieme -> una richiesta sola
-  const file=$('pdf').files[0];const text=$('src').value.trim();
-  if(!DATA&&!file&&!text){toast(tt('t_need_anon'),false);return Promise.resolve(null);}
+  const files=[...$('pdf').files],text=$('src').value.trim();
+  if(!DATA&&!files.length&&!text){toast(tt('t_need_anon'),false);return Promise.resolve(null);}
   const excl=TAGS_LOADED?[...EXCL]:null;
   PDF_JOB=(async()=>{
     try{
       let resp;
-      if(file){const fd=new FormData();fd.append('pdf',file);
+      if(files.length){const fd=new FormData();for(const file of files)fd.append('pdf',file);
         if(excl)fd.append('exclude_tags',excl.join(','));
           resp=await fetch('/pdf/preview',{method:'POST',body:fd});}
       else{const body={text};if(excl)body.exclude_tags=excl;
@@ -1775,14 +1788,14 @@ $('src').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Ente
 
 /* pdf picker + dropzone */
 const drop=$('drop');
-$('pdf').onchange=e=>{const f=e.target.files[0];if(f)onFile(f);};
+$('pdf').onchange=e=>{if(e.target.files.length)onFiles([...e.target.files]);};
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
 const OK_EXT=/\.(pdf|md|markdown|txt|text)$/i;
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];
   if(f&&(f.type==='application/pdf'||OK_EXT.test(f.name))){
     const dt=new DataTransfer();dt.items.add(f);$('pdf').files=dt.files;
-    onFile(f);}else toast(tt('t_drag_pdf'),false);});
+    onFiles([f]);}else toast(tt('t_drag_pdf'),false);});
 
 /* scroll sincronizzato: editor (sx) <-> anteprima e testo (dx) */
 linkScroll($('src'),$('viewPrev'));linkScroll($('viewPrev'),$('src'));
