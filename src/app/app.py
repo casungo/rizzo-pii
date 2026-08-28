@@ -58,6 +58,7 @@ from flask import (Flask, jsonify, render_template_string, request,
                    send_from_directory)
 
 import pdf_export
+import model_safety
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -290,10 +291,14 @@ def detect_model(text):
             results = [results]
         for (_, off), res in zip(chunks, results):
             for e in res:
+                label = e["entity_group"]
+                start, end = int(e["start"]) + off, int(e["end"]) + off
+                if not model_safety.keep(label, text, start, end):
+                    continue
                 ents.append({
-                    "label": e["entity_group"],
-                    "start": int(e["start"]) + off,
-                    "end": int(e["end"]) + off,
+                    "label": label,
+                    "start": start,
+                    "end": end,
                     "score": float(e["score"]),
                     "validated": False,
                     "source": "modello",
