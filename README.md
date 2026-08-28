@@ -312,7 +312,7 @@ different flow: **[Quickstart](#quickstart)**, further down.)
 
 ### Run with Docker
 
-Nothing to install but Docker; the image carries the CPU dependencies and the model.
+Nothing to install but Docker; the image carries the CPU dependencies, Italian OCR and the model.
 
 ```bash
 git clone https://github.com/Rizzo-AI-Academy/rizzo-pii
@@ -361,6 +361,7 @@ git clone https://github.com/Rizzo-AI-Academy/rizzo-pii
 cd rizzo-pii
 python -m venv .venv && source .venv/bin/activate     # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt                       # CPU torch is fine, no GPU needed
+sudo apt install tesseract-ocr tesseract-ocr-ita       # needed for scanned PDFs
 
 # the model (~1.2 GB) into the folder the app looks for. The folder name carries the
 # version: app.py pins it in APP_MODEL_VERSION, so revision and directory must match.
@@ -479,9 +480,9 @@ Two things can leave a value in clear, and both raise a warning in the UI (respo
 `X-PII-Residual` and `X-PII-Skipped`): a value still readable in the output at the final check, and
 values too short to search safely (under 2 alphanumeric characters, or 2 bare digits like `45`).
 Metadata, XMP, annotations, form-field values and bookmark titles are scrubbed too, and embedded
-attachments are dropped. Text baked into a raster image cannot be redacted at all — if **no**
-occurrence is found anywhere in the PDF the endpoint fails with `422` rather than handing you a file
-that only looks anonymized.
+attachments are dropped. For image-only pages the local Tesseract engine produces word boxes, then
+the app redacts the matching pixels. Declared PDF signature fields are covered too. Handwritten
+marks that are not a signature field still need a manual check before release.
 
 ### See the document, not just its text
 

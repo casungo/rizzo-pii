@@ -58,6 +58,7 @@ from flask import (Flask, jsonify, render_template_string, request,
                    send_from_directory)
 
 import pdf_export
+import scan_ocr
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -504,7 +505,8 @@ def _text_from_bytes(name, data):
     ext = os.path.splitext(name)[1]
     if _is_pdf(name, data):
         with fitz.open(stream=data, filetype="pdf") as doc:
-            return "\n".join(page.get_text() for page in doc)
+            native = "\n".join(page.get_text() for page in doc)
+        return native if native.strip() else scan_ocr.extract(data)[0]
     if ext in TEXT_EXTS or not ext:
         for enc in ("utf-8-sig", "utf-16", "latin-1"):
             try:
@@ -634,13 +636,15 @@ def _build_anonymized_pdf():
 
     if data and _is_pdf(name, data):
         try:
-            out, report = pdf_export.redact_pdf(data, res["mapping"])
+            _, ocr_pages = scan_ocr.extract(data)
+            image_redactions = scan_ocr.redactions(ocr_pages, res["mapping"])
+            out, report = pdf_export.redact_pdf(data, res["mapping"], image_redactions)
         except pdf_export.PdfError as e:
             raise _ReqError(str(e))
+        except scan_ocr.OcrError as e:
+            raise _ReqError(str(e), 503)
         if report["occurrences"] == 0:
-            raise _ReqError("Nessuna occorrenza trovata nel PDF: se il documento "
-                            "e' una scansione (testo dentro un'immagine) la "
-                            "redazione del layer testuale non puo' agire.", 422)
+            raise _ReqError("Nessuna PII localizzata nel PDF o nella sua OCR.", 422)
         return out, report, report["occurrences"], out_name
 
     try:

@@ -21,7 +21,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # libgomp1: runtime OpenMP richiesto dai kernel CPU di torch.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libgomp1 ca-certificates \
+      libgomp1 ca-certificates tesseract-ocr tesseract-ocr-ita \
  && rm -rf /var/lib/apt/lists/*
 
 # --- dipendenze --------------------------------------------------------------
