@@ -33,6 +33,7 @@ def validated(text, label):
 
 # (nome del caso, testo, tag, valore che deve essere rilevato)
 POSITIVI = [
+    ("nome_maiuscolo_busta_paga", "SAPRI ALICE", "FULLNAME", "SAPRI ALICE"),
     # IBAN: mod-97 obbligatorio (strict), quindi la regex deve arrivare al
     # validatore anche quando il numero e' stampato con i separatori.
     ("iban_compatto", "Bonifico su IT60X0542811101000000123456 entro il 30/09.",
@@ -161,6 +162,11 @@ class DetectorFormatTests(unittest.TestCase):
                       "Cfr. pagg. 12-15 e 20-24 della memoria."):
             with self.subTest(testo):
                 self.assertEqual([], spans(testo, "TELEPHONENUM"))
+
+    def test_intestazioni_e_indirizzi_maiuscoli_non_sono_nomi(self):
+        for testo in ("REPUBBLICA ITALIANA", "VIA VIZZA DI SOTTO", "TOTALE NETTO"):
+            with self.subTest(testo):
+                self.assertEqual([], spans(testo, "FULLNAME"))
 
     def test_iban_non_ingoia_la_parola_successiva(self):
         # La regex raggruppata e' golosa: se assorbe il token dopo l'IBAN il

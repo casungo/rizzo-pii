@@ -193,6 +193,18 @@ SOFT_REGEX_LABELS = {"DATE"}
 # Punteggiatura che chiude la frase e non fa parte dell'URL: "vedi https://x.it/pagina."
 _URL_TRAIL = ".,;:!?)]}»\"'"
 
+# Buste paga e moduli esportati spesso stampano il nominativo interamente in
+# maiuscolo. Le parole di struttura qui sotto non sono persone; il filtro evita
+# le intestazioni piu' comuni senza trasformare una regex di sicurezza in un
+# riconoscitore linguistico generale.
+_ALL_CAPS_NAME = re.compile(r"(?<![A-ZÀ-Ü])[A-ZÀ-Ü][A-ZÀ-Ü'’-]{1,}(?:\s+[A-ZÀ-Ü][A-ZÀ-Ü'’-]{1,}){1,2}(?![A-ZÀ-Ü])")
+_ALL_CAPS_NON_NAMES = {
+    "ANNO", "BANCA", "CAP", "CITTA", "CODICE", "COMUNE", "CONTRATTO", "DATA", "DI",
+    "FISCALE", "IBAN", "INDIRIZZO", "ITALIANA", "LORDO", "MESE", "NETTO", "PAGA",
+    "PAGAMENTO", "PIAZZA", "PROVINCIA", "REPUBBLICA", "STATO", "TOTALE", "TRIBUNALE",
+    "VIA", "VIALE",
+}
+
 
 # ISO 13616: lunghezza dell'IBAN per paese. Serve a sapere DOVE finisce quando e'
 # scritto a gruppi: indovinare il confine significa inghiottire le parole vicine o
@@ -267,9 +279,20 @@ def detect_iban(text):
     return [e for e in ents if e["end"] > e["start"]]
 
 
+def detect_all_caps_names(text):
+    """Fallback prudente per nominativi di due o tre parole tutte maiuscole."""
+    ents = []
+    for m in _ALL_CAPS_NAME.finditer(text):
+        if any(word in _ALL_CAPS_NON_NAMES for word in m.group().split()):
+            continue
+        ents.append({"label": "FULLNAME", "start": m.start(), "end": m.end(),
+                     "score": 0.9, "validated": False, "source": "regex"})
+    return ents
+
+
 def detect_regex(text):
     """Entita' della rete regex. validated=True solo quando il checksum passa."""
-    ents = detect_iban(text)
+    ents = detect_iban(text) + detect_all_caps_names(text)
     for label, rx, validator, strict in DETECTORS:
         for m in rx.finditer(text):
             start, end = m.start(), m.end()
@@ -290,5 +313,4 @@ def detect_regex(text):
                 "source": "regex",
             })
     return ents
-
 
