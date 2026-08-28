@@ -193,6 +193,20 @@ SOFT_REGEX_LABELS = {"DATE"}
 # Punteggiatura che chiude la frase e non fa parte dell'URL: "vedi https://x.it/pagina."
 _URL_TRAIL = ".,;:!?)]}»\"'"
 
+# Credenziali in configurazioni, log e snippet di codice. Si rileva il valore,
+# non il nome della variabile, cosi' `password="x"` diventa
+# `password="[SECRET_1]"` e il codice resta leggibile.
+_PRIVATE_KEY = re.compile(
+    r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]+?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----")
+_SECRET_ASSIGNMENT = re.compile(
+    r"""(?im)\b(?:api[_-]?(?:key|token)|secret(?:[_-]?(?:key|token))?|
+    access[_-]?token|auth(?:orization)?|password|passwd|pwd|client[_-]?secret|
+    private[_-]?key|(?:database|db|redis|mongo|sql)[_-]?(?:url|uri|connection))\b
+    \s*(?:=|:)\s*(?P<value>"(?:\\.|[^"\r\n])*"|'(?:\\.|[^'\r\n])*'|[^\s#;,\]}]+)""",
+    re.VERBOSE,
+)
+_BEARER_TOKEN = re.compile(r"(?i)\bBearer\s+(?P<value>[A-Za-z0-9._~+/=-]{8,})")
+
 
 # ISO 13616: lunghezza dell'IBAN per paese. Serve a sapere DOVE finisce quando e'
 # scritto a gruppi: indovinare il confine significa inghiottire le parole vicine o
@@ -267,9 +281,27 @@ def detect_iban(text):
     return [e for e in ents if e["end"] > e["start"]]
 
 
+def detect_secrets(text):
+    """Blocchi PEM e valori di credenziali in config o log."""
+    ents = [{"label": "PRIVATE_KEY", "start": m.start(), "end": m.end(),
+             "score": 1.0, "validated": False, "source": "regex"}
+            for m in _PRIVATE_KEY.finditer(text)]
+    for rx in (_SECRET_ASSIGNMENT, _BEARER_TOKEN):
+        for m in rx.finditer(text):
+            start, end = m.span("value")
+            if rx is _SECRET_ASSIGNMENT and text[start:end].casefold() == "bearer":
+                continue
+            if text[start] in "\"'" and end - start >= 2 and text[end - 1] == text[start]:
+                start, end = start + 1, end - 1
+            if start < end:
+                ents.append({"label": "SECRET", "start": start, "end": end,
+                             "score": 1.0, "validated": False, "source": "regex"})
+    return ents
+
+
 def detect_regex(text):
     """Entita' della rete regex. validated=True solo quando il checksum passa."""
-    ents = detect_iban(text)
+    ents = detect_iban(text) + detect_secrets(text)
     for label, rx, validator, strict in DETECTORS:
         for m in rx.finditer(text):
             start, end = m.start(), m.end()
@@ -290,5 +322,3 @@ def detect_regex(text):
                 "source": "regex",
             })
     return ents
-
-

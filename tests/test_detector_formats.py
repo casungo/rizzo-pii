@@ -33,6 +33,16 @@ def validated(text, label):
 
 # (nome del caso, testo, tag, valore che deve essere rilevato)
 POSITIVI = [
+    # Segreti in config o log: si redige il solo valore, mantenendo la chiave
+    # leggibile per poter passare lo snippet a un LLM.
+    ("password_quoted", 'password="mia_password_reale"', "SECRET", "mia_password_reale"),
+    ("api_key", "API_KEY=sk_test_abc123456", "SECRET", "sk_test_abc123456"),
+    ("database_url", "DATABASE_URL=postgres://utente:segreto@db.interno/app", "SECRET",
+     "postgres://utente:segreto@db.interno/app"),
+    ("bearer_token", "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload", "SECRET",
+     "eyJhbGciOiJIUzI1NiJ9.payload"),
+    ("private_key_pem", "-----BEGIN PRIVATE KEY-----\nABCDEF123456\n-----END PRIVATE KEY-----",
+     "PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----\nABCDEF123456\n-----END PRIVATE KEY-----"),
     # IBAN: mod-97 obbligatorio (strict), quindi la regex deve arrivare al
     # validatore anche quando il numero e' stampato con i separatori.
     ("iban_compatto", "Bonifico su IT60X0542811101000000123456 entro il 30/09.",
@@ -161,6 +171,10 @@ class DetectorFormatTests(unittest.TestCase):
                       "Cfr. pagg. 12-15 e 20-24 della memoria."):
             with self.subTest(testo):
                 self.assertEqual([], spans(testo, "TELEPHONENUM"))
+
+    def test_bearer_maschera_il_token_non_lo_schema(self):
+        testo = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload"
+        self.assertEqual(["eyJhbGciOiJIUzI1NiJ9.payload"], spans(testo, "SECRET"))
 
     def test_iban_non_ingoia_la_parola_successiva(self):
         # La regex raggruppata e' golosa: se assorbe il token dopo l'IBAN il

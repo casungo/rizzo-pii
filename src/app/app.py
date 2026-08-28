@@ -31,7 +31,7 @@ Endpoint HTTP:
                   il PDF anonimizzato resta in memoria e si guarda pagina per pagina
   GET  /doc/<id>/page/<n>.png   pagina renderizzata (anteprima a video)
   GET  /doc/<id>/file.pdf       download del documento tenuto in memoria
-  GET  /settings  legenda dei 23 tag, tag esclusi, stato del dizionario reversibile
+  GET  /settings  legenda dei tag, tag esclusi, stato del dizionario reversibile
   POST /settings  {"excluded_tags": [...], "mapping_enabled": bool} -> salva in prefs.json
                   (/tags e' un alias storico degli stessi due endpoint)
   GET  /config, POST /config, GET /port-check   host/porta del server
@@ -245,6 +245,10 @@ TAGS = [
      "Land registry data: sheet, parcel, subordinate", "Foglio 12, part. 345, sub. 6"),
     ("URL", "Indirizzo web (rilevato solo dalla rete regex, non dal modello)",
      "Web address (regex net only, not from the model)", "https://www.studiorossi.it"),
+    ("SECRET", "Password, token e connection string (rilevati dalla rete regex)",
+     "Password, token and connection string (regex net only)", "api_key=abc123"),
+    ("PRIVATE_KEY", "Chiave privata PEM (rilevata dalla rete regex)",
+     "PEM private key (regex net only)", "-----BEGIN PRIVATE KEY-----"),
 ]
 TAG_NAMES = [t[0] for t in TAGS]
 
