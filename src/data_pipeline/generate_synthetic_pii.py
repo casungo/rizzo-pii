@@ -301,12 +301,19 @@ def _date():
 # ("Egr. Rossi Mario"). Generandone un ordine solo il modello impara quello: sull'altro
 # lascia in chiaro meta' nome (issue #40).
 INVERTED_NAME_P = 0.3
+# Cedolini, estratti tabellari e anagrafiche stampano spesso il nominativo in
+# maiuscolo. La quota e' volutamente alta rispetto ai documenti discorsivi:
+# deve insegnare una grafia che il modello v1.5.0 non ha visto abbastanza.
+ALL_CAPS_NAME_P = 0.15
 
-def _name_pieces():
+def _name_pieces(upper=None):
     g, s, _ = _person()
+    upper = random.random() < ALL_CAPS_NAME_P if upper is None else upper
     if random.random() < INVERTED_NAME_P:
-        return [(s, "SURNAME"), (" ", None), (g, "GIVENNAME")]
-    return [(g, "GIVENNAME"), (" ", None), (s, "SURNAME")]
+        parts = [(s, "SURNAME"), (" ", None), (g, "GIVENNAME")]
+    else:
+        parts = [(g, "GIVENNAME"), (" ", None), (s, "SURNAME")]
+    return [(value.upper() if upper and label else value, label) for value, label in parts]
 
 def full_name():
     return _name_pieces()
