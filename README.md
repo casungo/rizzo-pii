@@ -344,6 +344,9 @@ Useful knobs (all optional):
 # a different port, tags left in the clear, irreversible anonymization
 docker run -d -p 127.0.0.1:8080:8080 -e PII_PORT=8080 \
   -e PII_EXCLUDE_TAGS=AGE,GENDER -e PII_MAPPING=0 rizzo-pii
+
+# Docker Compose: a port is published when the container is created, so recreate it.
+PII_PORT=8080 docker compose up -d --force-recreate
 ```
 
 > The image is **CPU-only**, which is the intended deployment (see the table above); `torch` and

@@ -6,6 +6,7 @@
 #   docker compose down              # stop (il volume delle preferenze resta)
 #
 # -> http://127.0.0.1:5005
+# Per un'altra porta: PII_PORT=8080 docker compose up -d --force-recreate
 
 services:
   rizzo-pii:
@@ -24,11 +25,11 @@ services:
       # Solo localhost: l'app processa documenti con dati personali,
       # il confine di rete lo mette docker. Togli "127.0.0.1:" solo
       # se ti serve davvero raggiungerla dalla LAN.
-      - "127.0.0.1:5005:5005"
+      - "${PII_PUBLISH_HOST:-127.0.0.1}:${PII_PORT:-5005}:${PII_PORT:-5005}"
 
     environment:
       PII_HOST: 0.0.0.0
-      PII_PORT: 5005
+      PII_PORT: ${PII_PORT:-5005}
       # Nessuna chiamata a Hugging Face a runtime: il modello e' nell'immagine.
       HF_HUB_OFFLINE: 1
       TRANSFORMERS_OFFLINE: 1
