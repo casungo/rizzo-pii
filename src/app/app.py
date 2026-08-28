@@ -1315,6 +1315,8 @@ PAGE = r"""
 
 <script>
 const $ = id => document.getElementById(id);
+let UPLOAD = null;
+const currentFile = () => UPLOAD || $('pdf').files[0] || null;
 let DATA = null;            // ultimo risultato analyze
 let MAP = {};              // {placeholder -> valore} sessione corrente
 const off = new Set();     // label nascoste nella preview
@@ -1470,7 +1472,7 @@ function applyLang(l){
     const v=T[L][el.getAttribute('data-i18n')]; if(v!=null) el.innerHTML=v;});
   document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
     const v=T[L][el.getAttribute('data-i18n-ph')]; if(v!=null) el.placeholder=v;});
-  if(!$('pdf').files.length) $('dropTxt').innerHTML=tt('drop');   // dropzone: solo se nessun file
+  if(!currentFile()) $('dropTxt').innerHTML=tt('drop');   // dropzone: solo se nessun file
   if(!$('rout')._raw) $('rout').innerHTML=routEmpty();
   renderMapping();
   if(TAGS.length && $('tagsOverlay').classList.contains('open')) renderTags();
@@ -1538,6 +1540,7 @@ function setSrcView(v){
 }
 
 async function onFile(f){
+  UPLOAD=f;
   $('dropTxt').innerHTML='📎 <b>'+escapeHtml(f.name)+'</b>';
   SRC_DOC=null;$('srcTabs').style.display='none';$('inHint').style.display='';
   setSrcView('text');
@@ -1563,7 +1566,7 @@ async function onFile(f){
 
 /* ---- analyze ---- */
 async function run(){
-  const file=$('pdf').files[0];const text=$('src').value.trim();
+  const file=currentFile();const text=$('src').value.trim();
   if(!file&&!text){toast(tt('t_need_input'),false);return;}
   $('go').disabled=true;const old=$('go').innerHTML;
   $('go').innerHTML='<span class="spin"></span> '+tt('analyzing');
@@ -1679,7 +1682,7 @@ let PDF_JOB=null;
 function buildOutPdf(){
   if(OUT_DOC)return Promise.resolve(OUT_DOC);
   if(PDF_JOB)return PDF_JOB;                 // click su tab + download insieme -> una richiesta sola
-  const file=$('pdf').files[0];const text=$('src').value.trim();
+  const file=currentFile();const text=$('src').value.trim();
   if(!DATA&&!file&&!text){toast(tt('t_need_anon'),false);return Promise.resolve(null);}
   const excl=TAGS_LOADED?[...EXCL]:null;
   PDF_JOB=(async()=>{
@@ -1760,7 +1763,7 @@ $('dictFile').onchange=e=>{const f=e.target.files[0];if(!f)return;
 
 /* ---- input helpers ---- */
 $('go').onclick=run;
-$('clear').onclick=()=>{$('src').value='';$('pdf').value='';$('dropTxt').innerHTML=tt('drop');
+$('clear').onclick=()=>{$('src').value='';$('pdf').value='';UPLOAD=null;$('dropTxt').innerHTML=tt('drop');
   DATA=null;$('prev').style.display='none';$('emptyPrev').style.display='';
   $('anon').value='';$('meta').innerHTML='';$('legend').innerHTML='';
   $('dictCard').style.display='none';$('ulock').textContent='';
@@ -1781,7 +1784,6 @@ $('pdf').onchange=e=>{const f=e.target.files[0];if(f)onFile(f);};
 const OK_EXT=/\.(pdf|md|markdown|txt|text)$/i;
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];
   if(f&&(f.type==='application/pdf'||OK_EXT.test(f.name))){
-    const dt=new DataTransfer();dt.items.add(f);$('pdf').files=dt.files;
     onFile(f);}else toast(tt('t_drag_pdf'),false);});
 
 /* scroll sincronizzato: editor (sx) <-> anteprima e testo (dx) */
