@@ -122,6 +122,8 @@ CATASTO = [
      "foglio 12, particella 345"),
     ("abbreviazioni_e_sub", "Fg. 12, part. 345, sub. 6.",
      "Fg. 12, part. 345, sub. 6"),
+    ("particella_dopo_foglio_gia_mascherato", "Fg. [CATASTO_1], part. 516.",
+     "part. 516"),
 ]
 
 TAG_CON_CHECKSUM = ("IBAN", "CF", "PIVA", "CREDITCARDNUMBER")
