@@ -58,6 +58,7 @@ from flask import (Flask, jsonify, render_template_string, request,
                    send_from_directory)
 
 import pdf_export
+import document_text
 import server_config
 # Rete REGEX + CHECKSUM: modulo a parte, senza dipendenze dal modello. I nomi
 # restano importabili da qui (`app.detect_regex`) per non rompere chi li usa.
@@ -142,7 +143,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 
 # Estensioni accettate dall'upload (il PDF passa da PyMuPDF, il resto e' testo puro).
-TEXT_EXTS = {".md", ".markdown", ".txt", ".text"}
+TEXT_EXTS = {".docx", ".md", ".markdown", ".txt", ".text"}
 
 # --------------------------------------------------------------------------- #
 # Anteprima a video dei PDF (documento caricato a sinistra, anonimizzato a destra)
@@ -505,6 +506,8 @@ def _text_from_bytes(name, data):
     if _is_pdf(name, data):
         with fitz.open(stream=data, filetype="pdf") as doc:
             return "\n".join(page.get_text() for page in doc)
+    if ext == ".docx":
+        return document_text.docx_text(data)
     if ext in TEXT_EXTS or not ext:
         for enc in ("utf-8-sig", "utf-16", "latin-1"):
             try:
@@ -513,7 +516,7 @@ def _text_from_bytes(name, data):
                 continue
     raise ValueError(
         f"Formato non supportato: {ext or name or 'sconosciuto'}. "
-        "Accetto .pdf, .md, .txt oppure testo incollato."
+        "Accetto .pdf, .docx, .md, .txt oppure testo incollato."
     )
 
 
@@ -1149,8 +1152,8 @@ PAGE = r"""
           <textarea id="src" data-i18n-ph="src_ph" placeholder="Incolla qui il testo dell'atto, del contratto o della sentenza…&#10;&#10;Oppure trascina un PDF nell'area qui sotto."></textarea>
           <label class="drop" id="drop">
             <span class="ic">📄</span>
-            <span id="dropTxt">Trascina un <b>PDF</b> o un <b>.md</b> qui, oppure <b>scegli un file</b></span>
-            <input type="file" id="pdf" accept=".pdf,.md,.markdown,.txt,application/pdf,text/markdown,text/plain" hidden>
+            <span id="dropTxt">Trascina un <b>PDF</b>, <b>.docx</b> o <b>.md</b> qui, oppure <b>scegli un file</b></span>
+            <input type="file" id="pdf" accept=".pdf,.docx,.md,.markdown,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/markdown,text/plain" hidden>
           </label>
           <div class="mapsw" id="mapSw">
             <button class="tsw" id="mapToggle" role="switch" aria-checked="true"
@@ -1337,7 +1340,7 @@ const T = {
   tab1:"Anonimizza", tab2:"Ripristina la risposta",
   in_title:"① Il tuo documento", in_hint:"incolla testo o trascina un PDF / .md",
   src_ph:"Incolla qui il testo dell'atto, del contratto o della sentenza…\n\nOppure trascina un PDF o un file .md nell'area qui sotto.",
-  drop:"Trascina un <b>PDF</b> o un <b>.md</b> qui, oppure <b>scegli un file</b>",
+  drop:"Trascina un <b>PDF</b>, <b>.docx</b> o un <b>.md</b> qui, oppure <b>scegli un file</b>",
   go:"Anonimizza", clear:"Pulisci",
   out_title:"② Risultato", v_prev:"Anteprima", v_text:"Testo da copiare",
   v_pdf:"Anteprima PDF", v_raw:"Testo", v_opdf:"PDF censurato",
@@ -1398,9 +1401,9 @@ const T = {
   tagline:"local model on CPU · GDPR compliant", badge:"100% local",
   notice:"<b>Work in progress.</b> The AI model isn't perfect and can make mistakes: always double-check the result before relying on it. These are the very first versions and the project is fully <b>open source</b>. If you find it useful, <b>leave a ⭐ on the repo</b> and help improve it: <a href=\"https://github.com/Rizzo-AI-Academy/rizzo-pii\" target=\"_blank\" rel=\"noopener\">open the repo on GitHub ↗</a>",
   tab1:"Anonymize", tab2:"Restore the answer",
-  in_title:"① Your document", in_hint:"paste text or drop a PDF / .md",
-  src_ph:"Paste here the text of the deed, contract or judgment…\n\nOr drop a PDF or a .md file onto the area below.",
-  drop:"Drop a <b>PDF</b> or a <b>.md</b> here, or <b>choose a file</b>",
+  in_title:"① Your document", in_hint:"paste text or drop a PDF / .docx / .md",
+  src_ph:"Paste here the text of the deed, contract or judgment…\n\nOr drop a PDF, .docx or .md file onto the area below.",
+  drop:"Drop a <b>PDF</b>, <b>.docx</b> or <b>.md</b> here, or <b>choose a file</b>",
   go:"Anonymize", clear:"Clear",
   out_title:"② Result", v_prev:"Preview", v_text:"Text to copy",
   v_pdf:"PDF preview", v_raw:"Text", v_opdf:"Redacted PDF",
@@ -1781,7 +1784,7 @@ const drop=$('drop');
 $('pdf').onchange=e=>{const f=e.target.files[0];if(f)onFile(f);};
 ['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
-const OK_EXT=/\.(pdf|md|markdown|txt|text)$/i;
+const OK_EXT=/\.(pdf|docx|md|markdown|txt|text)$/i;
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];
   if(f&&(f.type==='application/pdf'||OK_EXT.test(f.name))){
     onFile(f);}else toast(tt('t_drag_pdf'),false);});
