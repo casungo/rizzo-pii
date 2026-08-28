@@ -25,3 +25,22 @@ def candidates(text, entities, valid_labels):
         out.append({"label": label, "start": start, "end": end, "score": 1.0,
                     "validated": True, "source": "manuale"})
     return out
+
+
+def exclusions(text, entities):
+    """Valida le porzioni che l'utente vuole lasciare in chiaro."""
+    if entities is None:
+        return []
+    if not isinstance(entities, list):
+        raise ValueError("Le esclusioni manuali devono essere una lista.")
+    out = []
+    for entity in entities:
+        if not isinstance(entity, dict):
+            raise ValueError("Ogni esclusione manuale deve essere un oggetto.")
+        start, end = entity.get("start"), entity.get("end")
+        if (isinstance(start, bool) or isinstance(end, bool)
+                or not isinstance(start, int) or not isinstance(end, int)
+                or not 0 <= start < end <= len(text)):
+            raise ValueError("Intervallo di esclusione manuale non valido.")
+        out.append((start, end))
+    return out
