@@ -193,6 +193,18 @@ SOFT_REGEX_LABELS = {"DATE"}
 # Punteggiatura che chiude la frase e non fa parte dell'URL: "vedi https://x.it/pagina."
 _URL_TRAIL = ".,;:!?)]}»\"'"
 
+# Campi anagrafici dei moduli: il modello puo' vedere "Cognome" e "Nome" come
+# intestazioni, ma perdere i due valori nella riga sotto. Il contesto esplicito
+# permette un detector stretto senza trasformare ogni coppia di parole in un nome.
+_NAME_VALUE = r"[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]{1,}"
+_LABELED_NAMES = (
+    re.compile(r"\bcognome\s*[:=]\s*(?P<surname>" + _NAME_VALUE + r")\s+"
+               r"nome\s*[:=]\s*(?P<given>" + _NAME_VALUE + r")\b", re.IGNORECASE),
+    re.compile(r"(?m)^\s*cognome\s+(?:e\s+)?nome\s*$\s*^\s*(?P<surname>" +
+               _NAME_VALUE + r")\s{2,}(?P<given>" + _NAME_VALUE + r")\s*$",
+               re.IGNORECASE),
+)
+
 
 # ISO 13616: lunghezza dell'IBAN per paese. Serve a sapere DOVE finisce quando e'
 # scritto a gruppi: indovinare il confine significa inghiottire le parole vicine o
@@ -267,9 +279,20 @@ def detect_iban(text):
     return [e for e in ents if e["end"] > e["start"]]
 
 
+def detect_labeled_names(text):
+    ents = []
+    for rx in _LABELED_NAMES:
+        for match in rx.finditer(text):
+            for field in ("surname", "given"):
+                start, end = match.span(field)
+                ents.append({"label": "FULLNAME", "start": start, "end": end,
+                             "score": 0.9, "validated": False, "source": "regex"})
+    return ents
+
+
 def detect_regex(text):
     """Entita' della rete regex. validated=True solo quando il checksum passa."""
-    ents = detect_iban(text)
+    ents = detect_iban(text) + detect_labeled_names(text)
     for label, rx, validator, strict in DETECTORS:
         for m in rx.finditer(text):
             start, end = m.start(), m.end()
@@ -290,5 +313,4 @@ def detect_regex(text):
                 "source": "regex",
             })
     return ents
-
 

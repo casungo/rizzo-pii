@@ -176,6 +176,11 @@ class DetectorFormatTests(unittest.TestCase):
                    for e in detectors.detect_regex(testo) if e["label"] == "CF"}
         self.assertEqual(1, len(trovati))
 
+    def test_nome_e_cognome_nei_campi_del_modulo(self):
+        for testo in ("Cognome: Rossi Nome: Mario", "Cognome    Nome\nRossi       Mario"):
+            with self.subTest(testo):
+                self.assertEqual(["Rossi", "Mario"], spans(testo, "FULLNAME"))
+
     def test_modulo_senza_dipendenze_pesanti(self):
         # E' la premessa della CI: i test dei detector girano senza il modello.
         # L'import va fatto in un processo pulito, altrimenti l'esito dipende da
